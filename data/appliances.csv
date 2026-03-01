@@ -1,0 +1,11 @@
+id,name,brand,category,purchase_date,warranty_expiry,notes
+1,Refrigerator,Samsung,Kitchen,2022-01-15,2027-01-15,5-year warranty
+2,Washing Machine,LG,Laundry,2021-06-10,2024-06-10,3-year warranty - check drum
+3,Microwave Oven,Panasonic,Kitchen,2023-03-22,2026-03-22,3-year warranty
+4,Air Conditioner,Daikin,HVAC,2020-11-05,2025-11-05,5-year compressor warranty
+5,Dishwasher,Bosch,Kitchen,2022-08-18,2025-08-18,3-year warranty
+6,Dryer,Whirlpool,Laundry,2021-06-10,2024-06-10,3-year warranty
+7,Water Heater,Rheem,Plumbing,2019-04-30,2025-04-30,6-year warranty
+8,Vacuum Cleaner,Dyson,Cleaning,2023-09-01,2026-09-01,3-year warranty
+9,Television,Sony,Electronics,2022-12-25,2025-12-25,3-year warranty
+10,Oven Range,GE,Kitchen,2021-02-14,2026-02-14,5-year warranty
