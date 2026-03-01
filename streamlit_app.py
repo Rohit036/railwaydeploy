@@ -1,24 +1,32 @@
-import io
 import os
 from datetime import date, datetime, timedelta
 
 import pandas as pd
-import requests
 import streamlit as st
 
-API_URL = os.getenv("API_URL", "http://localhost:8000")
+DATA_FILE = os.path.join(os.path.dirname(__file__), "data", "appliances.csv")
+FIELDNAMES = ["id", "name", "brand", "category", "purchase_date", "warranty_expiry", "notes"]
 REMINDER_DAYS = 30  # warn when expiry is within this many days
 INVALID_DATE_DAYS = 9999  # fallback for unparseable expiry dates
 
 
-def fetch_appliances():
-    try:
-        resp = requests.get(f"{API_URL}/appliances", timeout=5)
-        resp.raise_for_status()
-        return resp.json()
-    except Exception as e:
-        st.error(f"Could not connect to API: {e}")
-        return []
+def load_data() -> pd.DataFrame:
+    if os.path.exists(DATA_FILE):
+        df = pd.read_csv(DATA_FILE, dtype=str)
+        if not df.empty:
+            return df
+    return pd.DataFrame(columns=FIELDNAMES)
+
+
+def save_data(df: pd.DataFrame) -> None:
+    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
+    df.to_csv(DATA_FILE, index=False)
+
+
+def next_id(df: pd.DataFrame) -> int:
+    if df.empty:
+        return 1
+    return int(df["id"].astype(int).max()) + 1
 
 
 def days_until_expiry(expiry_str: str) -> int:
@@ -53,30 +61,32 @@ with st.sidebar:
         if not name or not brand:
             st.sidebar.error("Name and Brand are required.")
         else:
-            payload = {
-                "name": name,
-                "brand": brand,
-                "category": category,
-                "purchase_date": str(purchase_date),
-                "warranty_expiry": str(warranty_expiry),
-                "notes": notes,
-            }
-            try:
-                resp = requests.post(f"{API_URL}/appliances", json=payload, timeout=5)
-                resp.raise_for_status()
-                st.sidebar.success(f"'{name}' added successfully!")
-                st.rerun()
-            except Exception as e:
-                st.sidebar.error(f"Failed to add appliance: {e}")
+            df = load_data()
+            new_row = pd.DataFrame(
+                [
+                    {
+                        "id": next_id(df),
+                        "name": name,
+                        "brand": brand,
+                        "category": category,
+                        "purchase_date": str(purchase_date),
+                        "warranty_expiry": str(warranty_expiry),
+                        "notes": notes,
+                    }
+                ]
+            )
+            df = pd.concat([df, new_row], ignore_index=True)
+            save_data(df)
+            st.sidebar.success(f"'{name}' added successfully!")
+            st.rerun()
 
 # ── Main content ────────────────────────────────────────────────────────────
-data = fetch_appliances()
+df = load_data()
 
-if not data:
+if df.empty:
     st.info("No appliances found. Add one using the sidebar.")
     st.stop()
 
-df = pd.DataFrame(data)
 df["days_left"] = df["warranty_expiry"].apply(days_until_expiry)
 
 # ── Expiry reminders ────────────────────────────────────────────────────────
@@ -98,17 +108,12 @@ if not expiring_soon.empty:
     )
 
 # ── Download button ─────────────────────────────────────────────────────────
-try:
-    csv_resp = requests.get(f"{API_URL}/appliances/download", timeout=5)
-    csv_resp.raise_for_status()
-    st.download_button(
-        label="⬇️ Download CSV",
-        data=csv_resp.content,
-        file_name="appliances.csv",
-        mime="text/csv",
-    )
-except Exception:
-    pass
+st.download_button(
+    label="⬇️ Download CSV",
+    data=df.drop(columns=["days_left"]).to_csv(index=False).encode(),
+    file_name="appliances.csv",
+    mime="text/csv",
+)
 
 st.markdown("---")
 
@@ -135,13 +140,9 @@ for _, row in df.iterrows():
         if row["notes"]:
             st.caption(f"📝 {row['notes']}")
         if st.button("🗑️ Delete", key=f"del_{row['id']}"):
-            try:
-                resp = requests.delete(
-                    f"{API_URL}/appliances/{row['id']}", timeout=5
-                )
-                resp.raise_for_status()
-                st.success(f"'{row['name']}' deleted.")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Failed to delete: {e}")
+            updated = load_data()
+            updated = updated[updated["id"].astype(str) != str(row["id"])]
+            save_data(updated)
+            st.success(f"'{row['name']}' deleted.")
+            st.rerun()
 
