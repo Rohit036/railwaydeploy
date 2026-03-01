@@ -1,11 +1,11 @@
-id,name,brand,category,purchase_date,warranty_expiry,notes
-1,Refrigerator,Samsung,Kitchen,2022-01-15,2027-01-15,5-year warranty
-2,Washing Machine,LG,Laundry,2021-06-10,2024-06-10,3-year warranty - check drum
-3,Microwave Oven,Panasonic,Kitchen,2023-03-22,2026-03-22,3-year warranty
-4,Air Conditioner,Daikin,HVAC,2020-11-05,2025-11-05,5-year compressor warranty
-5,Dishwasher,Bosch,Kitchen,2022-08-18,2025-08-18,3-year warranty
-6,Dryer,Whirlpool,Laundry,2021-06-10,2024-06-10,3-year warranty
-7,Water Heater,Rheem,Plumbing,2019-04-30,2025-04-30,6-year warranty
-8,Vacuum Cleaner,Dyson,Cleaning,2023-09-01,2026-09-01,3-year warranty
-9,Television,Sony,Electronics,2022-12-25,2025-12-25,3-year warranty
-10,Oven Range,GE,Kitchen,2021-02-14,2026-02-14,5-year warranty
+id,name,brand,category,purchase_date,warranty_expiry,serial_number,model_number,purchase_price,last_service_date,notes
+1,Refrigerator,Samsung,Kitchen,2022-01-15,2027-01-15,SN-RF2022-001,RF28R7351SR,1199.99,2024-06-10,5-year warranty
+2,Washing Machine,LG,Laundry,2021-06-10,2024-06-10,SN-WM2021-002,WM3500CW,649.99,2023-11-15,3-year warranty - check drum
+3,Microwave Oven,Panasonic,Kitchen,2023-03-22,2026-03-22,SN-MW2023-003,NN-SN966S,219.99,,3-year warranty
+4,Air Conditioner,Daikin,HVAC,2020-11-05,2025-11-05,SN-AC2020-004,FTXS35CVMB,899.99,2024-05-20,5-year compressor warranty
+5,Dishwasher,Bosch,Kitchen,2022-08-18,2025-08-18,SN-DW2022-005,SHPM88Z75N,1049.99,2024-08-18,3-year warranty
+6,Dryer,Whirlpool,Laundry,2021-06-10,2024-06-10,SN-DR2021-006,WED5000DW,599.99,,3-year warranty
+7,Water Heater,Rheem,Plumbing,2019-04-30,2025-04-30,SN-WH2019-007,XG50T12HH45U0,749.99,2022-04-30,6-year warranty
+8,Vacuum Cleaner,Dyson,Cleaning,2023-09-01,2026-09-01,SN-VC2023-008,V15 Detect,699.99,,3-year warranty
+9,Television,Sony,Electronics,2022-12-25,2025-12-25,SN-TV2022-009,XR-65X90K,1799.99,,3-year warranty
+10,Oven Range,GE,Kitchen,2021-02-14,2026-02-14,SN-OR2021-010,JB735SPSS,849.99,2023-02-14,5-year warranty
