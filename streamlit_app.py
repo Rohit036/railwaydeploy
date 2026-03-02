@@ -1,6 +1,7 @@
 import html
 import os
-from datetime import date, datetime, timedelta
+import re
+from datetime import date, datetime, timedelta, timezone
 
 import pandas as pd
 import plotly.express as px
@@ -13,6 +14,7 @@ METADATA_FILE = os.path.join(os.path.dirname(__file__), "data", "appliance_metad
 FIELDNAMES = [
     "id", "name", "brand", "category", "purchase_date", "warranty_expiry",
     "serial_number", "model_number", "purchase_price", "last_service_date", "notes",
+    "manual_url",
 ]
 METADATA_FIELDNAMES = [
     "appliance_type", "category", "typical_brands",
@@ -100,6 +102,305 @@ def _parse_date_input(val: str, fallback: date) -> date:
         return datetime.strptime(str(val), "%Y-%m-%d").date()
     except (ValueError, TypeError):
         return fallback
+
+
+# ── Troubleshooting knowledge base ───────────────────────────────────────────
+TROUBLESHOOT_GUIDE: dict[str, list[dict]] = {
+    "Kitchen": [
+        {
+            "symptom": "Refrigerator not cooling",
+            "steps": [
+                "Check the appliance is plugged in and the circuit breaker has not tripped.",
+                "Clean the condenser coils (at the back or beneath the unit).",
+                "Inspect door seals for gaps or cracks; replace if damaged.",
+                "Ensure internal vents are not blocked by food items.",
+                "Verify temperature is set to 2–4 °C (fridge) / -18 °C (freezer).",
+            ],
+            "pro_tip": "Persistent warm temperatures despite correct settings may indicate a failing compressor or refrigerant leak — contact a qualified engineer.",
+        },
+        {
+            "symptom": "Dishwasher not draining",
+            "steps": [
+                "Remove and clean the filter basket at the bottom of the dishwasher.",
+                "Check the drain hose for kinks or blockages.",
+                "If newly installed, ensure the garbage-disposal knockout plug has been removed.",
+                "Run the garbage disposal (if present) to clear the shared drain line.",
+                "Check the door latch is fully closing — the pump only runs when door is sealed.",
+            ],
+            "pro_tip": "A faulty drain pump motor usually requires replacement by a technician.",
+        },
+        {
+            "symptom": "Oven not heating evenly",
+            "steps": [
+                "Allow 15–20 minutes for full preheat before placing food inside.",
+                "Place bakeware on the centre rack for best circulation.",
+                "Use an oven thermometer to verify the actual internal temperature.",
+                "Clean any burnt residue from the heating elements or oven floor.",
+                "Ensure the convection fan (if present) is not obstructed.",
+            ],
+            "pro_tip": "A burnt-out bake or broil element can often be replaced as a DIY task — consult the service manual for part numbers.",
+        },
+        {
+            "symptom": "Microwave not heating",
+            "steps": [
+                "Check the door latch closes completely — the interlock prevents operation when open.",
+                "Confirm the appliance is not in demo/display mode (consult manual to disable).",
+                "Unplug for 60 seconds, then reconnect (soft reset).",
+                "Check and replace the door fuse if accessible (refer to manual).",
+            ],
+            "pro_tip": "The magnetron and high-voltage capacitor are dangerous to handle — magnetron replacement must be done by a qualified engineer.",
+        },
+    ],
+    "Laundry": [
+        {
+            "symptom": "Washing machine not draining / leaving water in drum",
+            "steps": [
+                "Clean the pump filter / coin trap (usually behind a small door at the front bottom).",
+                "Inspect the drain hose for kinks, and ensure the drain outlet is no higher than 1 metre from the floor.",
+                "Run a Rinse & Spin cycle to test drainage.",
+                "Check that the selected programme has a spin/drain phase enabled.",
+            ],
+            "pro_tip": "A faulty drain pump needs professional replacement.",
+        },
+        {
+            "symptom": "Washing machine vibrating excessively",
+            "steps": [
+                "Level all four adjustable feet firmly on the floor.",
+                "Remove shipping bolts from the back (present on new machines — check the manual).",
+                "Reduce load size — overloading causes drum imbalance.",
+                "Redistribute clothing evenly inside the drum.",
+            ],
+            "pro_tip": "Loud grinding during spin often indicates worn drum bearings — a service call is recommended.",
+        },
+        {
+            "symptom": "Tumble dryer not drying clothes",
+            "steps": [
+                "Clean the lint filter before every drying cycle.",
+                "Ensure the exhaust vent hose is not kinked, crushed, or blocked at the outside vent.",
+                "Dry smaller loads — overloading significantly reduces efficiency.",
+                "Select the correct heat setting for the fabric type.",
+                "For heat-pump dryers, empty the condensate water tank and clean the heat-exchanger filter.",
+            ],
+            "pro_tip": "A faulty heating element or thermostat requires professional diagnosis.",
+        },
+    ],
+    "HVAC": [
+        {
+            "symptom": "Air conditioner not cooling",
+            "steps": [
+                "Check and replace or wash the air filter if dirty (recommended monthly in heavy use).",
+                "Ensure the thermostat is set at least 2 °C below the current room temperature.",
+                "Inspect the outdoor unit — clear leaves, dust, and debris from the fins.",
+                "Close all windows and doors to prevent warm air ingress.",
+                "Check the remote batteries and try operating from the unit's manual controls.",
+            ],
+            "pro_tip": "Ice on the refrigerant pipes or warm air from the indoor unit while the compressor runs outside indicates low refrigerant — only a Gas Safe / F-Gas certified engineer may top this up.",
+        },
+        {
+            "symptom": "Boiler not producing hot water or heating",
+            "steps": [
+                "Check the boiler pressure gauge — it should read 1–1.5 bar when cold; re-pressurise if low using the filling loop.",
+                "Press the reset button on the boiler and wait 5 minutes.",
+                "Ensure the gas supply is on and the pilot light (if applicable) is lit.",
+                "Verify the programmer / thermostat schedule and temperature settings.",
+                "Bleed radiators to remove trapped air if individual radiators are cold at the top.",
+            ],
+            "pro_tip": "Boiler faults (especially error codes, gas smells, or repeated lock-outs) must be diagnosed by a Gas Safe registered engineer.",
+        },
+        {
+            "symptom": "Strange smell from HVAC unit",
+            "steps": [
+                "Replace or wash the air filter.",
+                "Inspect vents and grilles for visible mould; clean with a diluted bleach solution (1:10).",
+                "Ensure the condensate drain pan is not overflowing — clear blockages.",
+                "Run the system for 15 minutes with a window slightly open to air out.",
+            ],
+            "pro_tip": "A burning smell may indicate an electrical fault — turn the unit off immediately and contact a qualified engineer.",
+        },
+    ],
+    "Electronics": [
+        {
+            "symptom": "TV not turning on",
+            "steps": [
+                "Check the power cable and try a different wall outlet.",
+                "Press the physical power button on the TV (not just the remote).",
+                "Replace the remote control batteries.",
+                "Unplug the TV for 30 seconds, then reconnect (cold reset).",
+                "Check for a standby indicator light — if present, the panel or mainboard may be faulty.",
+            ],
+            "pro_tip": "No backlight (sound but black screen) usually indicates a faulty backlight inverter or LED strip — professional repair required.",
+        },
+        {
+            "symptom": "Laptop overheating / shutting down",
+            "steps": [
+                "Clean the ventilation grilles with compressed air (do not use a vacuum directly).",
+                "Ensure the laptop is placed on a hard, flat surface — not on a bed or cushion.",
+                "Check Task Manager / Activity Monitor for processes maxing out the CPU.",
+                "Use a laptop cooling pad for extended sessions.",
+                "Update the BIOS/firmware — manufacturers often release thermal management improvements.",
+            ],
+            "pro_tip": "If the fan is noisy or not spinning, or if overheating persists after cleaning, thermal paste reapplication by a technician is likely needed.",
+        },
+        {
+            "symptom": "Printer not printing",
+            "steps": [
+                "Check ink or toner levels and replace cartridges if low.",
+                "Clear the print queue: Settings → Printers & Scanners → Open Queue → Cancel All.",
+                "Restart both the printer and the computer.",
+                "Delete and reinstall the printer driver from the manufacturer's website.",
+                "For inkjet printers, run the built-in print-head cleaning utility.",
+            ],
+            "pro_tip": "Severe print-head clogging on inkjet printers may require a soak in warm distilled water or a replacement print head.",
+        },
+    ],
+    "Plumbing": [
+        {
+            "symptom": "Water heater not producing hot water",
+            "steps": [
+                "Verify the thermostat is set to 60 °C (minimum to prevent Legionella).",
+                "For gas units: check the pilot light is lit and the gas supply valve is open.",
+                "For electric units: check the circuit breaker and reset the high-temperature cut-off switch (usually a red button on the unit).",
+                "Flush sediment from the tank annually: connect a hose to the drain valve and run until water runs clear.",
+            ],
+            "pro_tip": "Anode rod inspection and replacement every 3–5 years significantly extends tank life — consult a plumber.",
+        },
+        {
+            "symptom": "Boiler pressure keeps dropping",
+            "steps": [
+                "Check all radiator valves are fully open.",
+                "Inspect visible pipes and fittings for drips or damp patches.",
+                "Re-pressurise via the filling loop to 1–1.5 bar.",
+                "Bleed radiators to remove air that may be masking a pressure issue.",
+            ],
+            "pro_tip": "A system that requires regular re-pressurisation has a leak — call a Gas Safe registered engineer to locate and repair it.",
+        },
+    ],
+    "Cleaning": [
+        {
+            "symptom": "Vacuum cleaner losing suction",
+            "steps": [
+                "Empty the dustbin or replace the bag.",
+                "Wash or replace the filters (check the manual for filter locations and schedules).",
+                "Disconnect the hose and blow through it to check for blockages.",
+                "Remove the brush roll and cut away any tangled hair or fibre.",
+                "Check all seals and clips are firmly seated.",
+            ],
+            "pro_tip": "A persistent suction loss after all filters are clean may indicate a worn motor seal — seek service.",
+        },
+        {
+            "symptom": "Robot vacuum not charging / docking",
+            "steps": [
+                "Clean the charging contacts on both robot and dock with a dry microfibre cloth.",
+                "Ensure the dock is plugged in, the LED is on, and it is on a hard, flat floor with clear space in front.",
+                "Move the dock away from direct sunlight or bright lamps (can confuse IR docking sensors).",
+                "Check for firmware updates in the companion app.",
+                "Manually place the robot on the dock to confirm contacts align.",
+            ],
+            "pro_tip": "Li-ion batteries in robot vacuums typically need replacement after 2–3 years of daily use.",
+        },
+    ],
+    "Other": [
+        {
+            "symptom": "Appliance not turning on",
+            "steps": [
+                "Check the power supply — try a different socket or extension lead.",
+                "Inspect the power cable for visible damage, kinks, or scorch marks.",
+                "Check and replace the fuse in the plug with the correct rated fuse.",
+                "Unplug for 60 seconds and try again (soft reset).",
+                "Check for a reset button on the appliance body.",
+            ],
+            "pro_tip": "If the appliance trips the circuit breaker when plugged in, there is likely an internal short — do not use it and seek professional repair.",
+        },
+        {
+            "symptom": "Unusual noise during operation",
+            "steps": [
+                "Ensure the appliance is on a level surface.",
+                "Check for any loose parts, panels, or foreign objects inside.",
+                "Tighten any visible screws or fasteners.",
+                "Consult the troubleshooting section of the user manual for noise-specific advice.",
+            ],
+            "pro_tip": "Grinding or squealing noises often indicate a worn component — seek professional advice before continued use.",
+        },
+    ],
+}
+
+
+def generate_ics(name: str, warranty_expiry: str, purchase_date: str) -> str:
+    """Return an ICS calendar string with a service-check reminder and warranty-expiry event."""
+    try:
+        expiry = datetime.strptime(warranty_expiry, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return ""
+
+    today = date.today()
+
+    def _d(d: date) -> str:
+        return d.strftime("%Y%m%d")
+
+    def _dt() -> str:
+        return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+    def _ics_escape(text: str) -> str:
+        """Escape ICS text fields per RFC 5545."""
+        return text.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+
+    safe_uid = re.sub(r"[^a-zA-Z0-9-]", "-", name.lower())
+    uid_warranty = f"warranty-{safe_uid}-{_d(expiry)}@appliancemanager"
+    dtstamp = _dt()
+
+    esc_name = _ics_escape(name)
+    esc_expiry = _ics_escape(warranty_expiry)
+    esc_purchase = _ics_escape(purchase_date)
+
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Appliance Manager//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+    ]
+
+    # ── Service-check reminder event (only if warranty hasn't already expired) ──
+    reminder_date = expiry - timedelta(days=30)
+    if expiry > today:
+        reminder_date = max(reminder_date, today)
+        uid_service = f"service-{safe_uid}-{_d(reminder_date)}@appliancemanager"
+        lines += [
+            "BEGIN:VEVENT",
+            f"UID:{uid_service}",
+            f"DTSTAMP:{dtstamp}",
+            f"DTSTART;VALUE=DATE:{_d(reminder_date)}",
+            f"DTEND;VALUE=DATE:{_d(reminder_date + timedelta(days=1))}",
+            f"SUMMARY:Service Check Due - {esc_name}",
+            f"DESCRIPTION:Schedule a service check for {esc_name} before the warranty expires"
+            f" on {esc_expiry}. Purchase date: {esc_purchase}.",
+            "BEGIN:VALARM",
+            "TRIGGER:-P1D",
+            "ACTION:DISPLAY",
+            f"DESCRIPTION:Service check reminder for {esc_name}",
+            "END:VALARM",
+            "END:VEVENT",
+        ]
+
+    # ── Warranty-expiry event ──
+    lines += [
+        "BEGIN:VEVENT",
+        f"UID:{uid_warranty}",
+        f"DTSTAMP:{dtstamp}",
+        f"DTSTART;VALUE=DATE:{_d(expiry)}",
+        f"DTEND;VALUE=DATE:{_d(expiry + timedelta(days=1))}",
+        f"SUMMARY:Warranty Expires - {esc_name}",
+        f"DESCRIPTION:Warranty for {esc_name} expires on {esc_expiry}."
+        f" Purchase date: {esc_purchase}.",
+        "BEGIN:VALARM",
+        "TRIGGER:-P7D",
+        "ACTION:DISPLAY",
+        f"DESCRIPTION:Warranty expiry reminder for {esc_name}",
+        "END:VALARM",
+        "END:VEVENT",
+        "END:VCALENDAR",
+    ]
+    return "\r\n".join(lines) + "\r\n"
 
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -451,102 +752,168 @@ with tab_appl:
         if view_df.empty:
             st.info("No appliances match your filters.")
         else:
-            for _, row in view_df.iterrows():
-                days     = int(row["days_left"])
-                cat_icon = CATEGORY_ICONS.get(str(row.get("category", "")), "🔧")
+            # ── Summary table ─────────────────────────────────────────────────
+            tbl = view_df[
+                ["name", "brand", "category", "purchase_date", "warranty_expiry",
+                 "_status", "days_left", "purchase_price"]
+            ].copy()
+            tbl["days_left"] = tbl["days_left"].apply(
+                lambda x: None if x == INVALID_DATE_DAYS else x
+            )
+            tbl.columns = [
+                "Name", "Brand", "Category", "Purchased", "Warranty Expires",
+                "Status", "Days Left", "Price (£)",
+            ]
+            st.dataframe(
+                tbl,
+                column_config={
+                    "Days Left":  st.column_config.NumberColumn("Days Left",  format="%.0f d"),
+                    "Price (£)":  st.column_config.NumberColumn("Price (£)",  format="£%.0f"),
+                },
+                use_container_width=True,
+                hide_index=True,
+            )
 
-                if days < 0:
-                    badge_cls, badge_txt, bar_color = "badge-red",    f"Expired {abs(days)}d ago", "#ef4444"
-                    progress_val = 1.0
-                elif days <= REMINDER_DAYS:
-                    badge_cls, badge_txt, bar_color = "badge-yellow", f"Expires in {days}d",       "#f59e0b"
-                    progress_val = warranty_age_fraction(row["purchase_date"], row["warranty_expiry"])
-                else:
-                    badge_cls, badge_txt, bar_color = "badge-green",  f"{days}d remaining",        "#22c55e"
-                    progress_val = warranty_age_fraction(row["purchase_date"], row["warranty_expiry"])
+            # ── Details & Actions panel ───────────────────────────────────────
+            st.markdown(
+                "<div class='section-header'>Appliance Details & Actions</div>",
+                unsafe_allow_html=True,
+            )
+            appl_options = {
+                str(r["id"]): f"{CATEGORY_ICONS.get(str(r['category']), '🔧')} {r['name']} ({r['brand']})"
+                for _, r in view_df.iterrows()
+            }
+            sel_detail_id = st.selectbox(
+                "Select appliance",
+                options=list(appl_options.keys()),
+                format_func=lambda x: appl_options[x],
+                key="appl_detail_sel",
+            )
+            if sel_detail_id:
+                row  = view_df[view_df["id"].astype(str) == sel_detail_id].iloc[0]
+                days = int(row["days_left"])
 
-                det = ""
-                if row.get("model_number"):
-                    det += f"<span class='detail-label'>Model</span> <span class='detail-value'>{html.escape(str(row['model_number']))}</span> &nbsp;·&nbsp; "
-                if row.get("serial_number"):
-                    det += f"<span class='detail-label'>S/N</span> <span class='detail-value'>{html.escape(str(row['serial_number']))}</span> &nbsp;·&nbsp; "
-                if row.get("purchase_price"):
-                    det += f"<span class='detail-label'>Price</span> <span class='detail-value'>£{html.escape(str(row['purchase_price']))}</span> &nbsp;·&nbsp; "
-                det = det.rstrip(" &nbsp;·&nbsp; ")
+                # ── Key metrics ──
+                d1, d2, d3 = st.columns(3)
+                d1.metric("Purchase Date",   row["purchase_date"])
+                d2.metric("Warranty Expiry", row["warranty_expiry"])
+                d3.metric("Days Left",       days if days != INVALID_DATE_DAYS else "—")
 
-                esc = {k: html.escape(str(v)) for k, v in row.items()}
+                d4, d5, d6 = st.columns(3)
+                d4.metric("Model",          row.get("model_number")  or "—")
+                d5.metric("Serial No.",     row.get("serial_number") or "—")
+                d6.metric("Purchase Price", f"£{row['purchase_price']}" if row.get("purchase_price") else "—")
 
-                with st.container():
-                    st.markdown(
-                        f"""
-                        <div class="appliance-card">
-                          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                            <div>
-                              <p class="card-title">{cat_icon} {esc['name']}</p>
-                              <p class="card-sub">{esc['brand']} &nbsp;·&nbsp; {esc['category']}</p>
-                            </div>
-                            <span class="badge {badge_cls}">{badge_txt}</span>
-                          </div>
-                          {"<p style='margin:8px 0 4px;font-size:0.85rem;'>" + det + "</p>" if det else ""}
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
+                if row.get("last_service_date"):
+                    st.markdown(f"🔧 **Last serviced:** {row['last_service_date']}")
+                if row.get("notes"):
+                    st.markdown(f"📝 **Notes:** {row['notes']}")
+
+                # ── Standard action buttons ──
+                ba1, ba2, ba3 = st.columns(3)
+                with ba1:
+                    if st.button("✏️ Edit", key=f"edit_{row['id']}", use_container_width=True):
+                        st.session_state.edit_id = str(row["id"])
+                        st.rerun()
+                with ba2:
+                    if st.button("📋 Duplicate", key=f"dup_{row['id']}", use_container_width=True):
+                        current = load_data()
+                        dup = {k: row[k] for k in FIELDNAMES}
+                        dup["id"]   = next_id(current)
+                        dup["name"] = f"{row['name']} (copy)"
+                        current = pd.concat([current, pd.DataFrame([dup])], ignore_index=True)
+                        save_data(current)
+                        st.success(f"Duplicated '{row['name']}'!")
+                        st.rerun()
+                with ba3:
+                    if st.button("🗑️ Delete", key=f"del_{row['id']}", use_container_width=True):
+                        current = load_data()
+                        current = current[current["id"].astype(str) != str(row["id"])]
+                        save_data(current)
+                        st.success(f"'{row['name']}' deleted.")
+                        st.rerun()
+
+                # ── New feature buttons ──
+                bb1, bb2 = st.columns(2)
+
+                # 📅 Add to Calendar
+                with bb1:
+                    ics_data = generate_ics(
+                        str(row["name"]),
+                        str(row["warranty_expiry"]),
+                        str(row["purchase_date"]),
                     )
+                    if ics_data:
+                        safe_name = re.sub(r"[^\w\-]", "_", str(row["name"])).lower()
+                        st.download_button(
+                            "📅 Add to Calendar",
+                            data=ics_data.encode("utf-8"),
+                            file_name=f"{safe_name}_reminders.ics",
+                            mime="text/calendar",
+                            use_container_width=True,
+                            key=f"cal_{row['id']}",
+                            help="Downloads a .ics file with a service-check reminder and warranty-expiry event.",
+                        )
+                    else:
+                        st.button(
+                            "📅 Add to Calendar", disabled=True,
+                            use_container_width=True, key=f"cal_dis_{row['id']}",
+                            help="Set a valid warranty expiry date to enable calendar export.",
+                        )
 
-                    pct = int(progress_val * 100)
-                    st.markdown(
-                        f"""
-                        <div style="margin:-12px 0 6px;">
-                          <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:{_txt2};margin-bottom:3px;">
-                            <span>Purchased {esc['purchase_date']}</span>
-                            <span>Expires {esc['warranty_expiry']}</span>
-                          </div>
-                          <div style="height:6px;background:{_border};border-radius:999px;">
-                            <div style="height:6px;width:{pct}%;background:{bar_color};border-radius:999px;"></div>
-                          </div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
+                # 📖 Service Manual
+                with bb2:
+                    manual_url = str(row.get("manual_url", "")).strip()
+                    url_safe = manual_url if re.match(r"^https?://", manual_url, re.IGNORECASE) else ""
+                    if url_safe:
+                        st.link_button(
+                            "📖 Service Manual", url=url_safe,
+                            use_container_width=True,
+                        )
+                    else:
+                        help_txt = (
+                            "URL must start with http:// or https://"
+                            if manual_url else "Add a manual URL via the ✏️ Edit tab to enable this button."
+                        )
+                        st.button(
+                            "📖 Service Manual", disabled=True,
+                            use_container_width=True, key=f"manual_{row['id']}",
+                            help=help_txt,
+                        )
+
+                # 🔧 Troubleshoot guide (collapsible)
+                cat   = str(row.get("category", "Other"))
+                guide = TROUBLESHOOT_GUIDE.get(cat, TROUBLESHOOT_GUIDE["Other"])
+                with st.expander("🔧 Troubleshoot"):
+                    ts_q = st.text_input(
+                        "Search issue",
+                        placeholder="e.g. not cooling, strange noise",
+                        key=f"ts_q_{row['id']}",
                     )
+                    if ts_q:
+                        matched = [
+                            g for g in guide
+                            if ts_q.lower() in g["symptom"].lower()
+                            or any(ts_q.lower() in s.lower() for s in g["steps"])
+                        ]
+                        if not matched:
+                            st.info("No matches found — showing all issues for this category.")
+                            matched = guide
+                    else:
+                        matched = guide
 
-                    with st.expander("Details & Actions", expanded=False):
-                        d1, d2, d3 = st.columns(3)
-                        d1.metric("Purchase Date",   row["purchase_date"])
-                        d2.metric("Warranty Expiry", row["warranty_expiry"])
-                        d3.metric("Days Left", days if days != INVALID_DATE_DAYS else "—")
-
-                        d4, d5, d6 = st.columns(3)
-                        d4.metric("Model",          row["model_number"]  if row.get("model_number")  else "—")
-                        d5.metric("Serial No.",     row["serial_number"] if row.get("serial_number") else "—")
-                        d6.metric("Purchase Price", f"£{row['purchase_price']}" if row.get("purchase_price") else "—")
-
-                        if row.get("last_service_date"):
-                            st.markdown(f"🔧 **Last serviced:** {row['last_service_date']}")
-                        if row.get("notes"):
-                            st.markdown(f"📝 **Notes:** {row['notes']}")
-
-                        btn1, btn2, btn3 = st.columns(3)
-                        with btn1:
-                            if st.button("✏️ Edit", key=f"edit_{row['id']}", use_container_width=True):
-                                st.session_state.edit_id = str(row["id"])
-                                st.rerun()
-                        with btn2:
-                            if st.button("📋 Duplicate", key=f"dup_{row['id']}", use_container_width=True):
-                                current = load_data()
-                                dup = {k: row[k] for k in FIELDNAMES}
-                                dup["id"]   = next_id(current)
-                                dup["name"] = f"{row['name']} (copy)"
-                                current = pd.concat([current, pd.DataFrame([dup])], ignore_index=True)
-                                save_data(current)
-                                st.success(f"Duplicated '{row['name']}'!")
-                                st.rerun()
-                        with btn3:
-                            if st.button("🗑️ Delete", key=f"del_{row['id']}", use_container_width=True):
-                                current = load_data()
-                                current = current[current["id"].astype(str) != str(row["id"])]
-                                save_data(current)
-                                st.success(f"'{row['name']}' deleted.")
-                                st.rerun()
+                    sel_sym = st.selectbox(
+                        "Select symptom / issue",
+                        [g["symptom"] for g in matched],
+                        key=f"ts_sel_{row['id']}",
+                    )
+                    chosen = next((g for g in matched if g["symptom"] == sel_sym), None)
+                    if chosen:
+                        st.markdown("**Steps to resolve:**")
+                        for i, step in enumerate(chosen["steps"], 1):
+                            st.markdown(f"{i}. {step}")
+                        if chosen.get("pro_tip"):
+                            st.info(f"💡 **When to call a professional:** {chosen['pro_tip']}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -607,6 +974,11 @@ with tab_add:
         a_service = st.date_input("Last Service Date", value=None,
                                   help="Leave blank if never serviced.")
         a_notes   = st.text_area("Notes", placeholder="Optional notes…")
+        a_manual  = st.text_input(
+            "Service Manual URL",
+            placeholder="https://… (link to PDF or product page)",
+            help="Paste the URL of the appliance's service manual or product page.",
+        )
 
         if hint_brands:
             st.caption(f"💡 Suggested brands for {sel_meta}: {', '.join(hint_brands)}")
@@ -630,6 +1002,7 @@ with tab_add:
                 "purchase_price":   a_price,
                 "last_service_date": str(a_service) if a_service else "",
                 "notes":            a_notes,
+                "manual_url":       a_manual,
             }])
             current = pd.concat([current, new_row], ignore_index=True)
             save_data(current)
@@ -694,6 +1067,12 @@ with tab_edit:
             last_service_val = _parse_date_input(str(row.get("last_service_date", "")), None)
             e_service = st.date_input("Last Service Date", value=last_service_val)
             e_notes   = st.text_area("Notes", value=str(row.get("notes", "")))
+            e_manual  = st.text_input(
+                "Service Manual URL",
+                value=str(row.get("manual_url", "")),
+                placeholder="https://… (link to PDF or product page)",
+                help="Paste the URL of the appliance's service manual or product page.",
+            )
 
             save_col, del_col = st.columns(2)
             with save_col:
@@ -717,6 +1096,7 @@ with tab_edit:
                 current.loc[mask, "warranty_expiry"]  = str(e_expiry)
                 current.loc[mask, "last_service_date"] = str(e_service) if e_service else ""
                 current.loc[mask, "notes"]            = e_notes
+                current.loc[mask, "manual_url"]       = e_manual
                 save_data(current)
                 st.success(f"✅ '{e_name}' updated!")
                 st.session_state.edit_id = None
@@ -845,16 +1225,19 @@ with tab_settings:
     st.markdown("#### ℹ️ About")
     st.markdown(
         """
-        **Appliance Manager** v2.0
+        **Appliance Manager** v3.0
 
         Track your home appliances, warranties & service history all in one place.
 
         | Tab | Purpose |
         |---|---|
         | 📊 Dashboard | Charts: category breakdown, warranty status, timeline, costs |
-        | 🏠 Appliances | Browse, search, filter and manage all appliances |
+        | 🏠 Appliances | Browse, filter & manage all appliances in a table; select one for details |
+        | 🏠 → 📅 Add to Calendar | Download a .ics file with a service-check reminder and warranty-expiry event |
+        | 🏠 → 📖 Service Manual | Opens the appliance's service manual URL (set via ✏️ Edit) |
+        | 🏠 → 🔧 Troubleshoot | Keyword-searchable step-by-step guide for common issues by category |
         | ➕ Add | Add a new appliance with smart template hints |
-        | ✏️ Edit | Full edit form for any existing appliance |
+        | ✏️ Edit | Full edit form including service manual URL |
         | 🔄 Bulk Ops | Multi-select delete, export & batch warranty updates |
         | ⚙️ Settings | Theme toggle and CSV downloads |
         """

@@ -10,7 +10,10 @@ from pydantic import BaseModel
 app = FastAPI(title="Appliance Manager API")
 
 DATA_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "appliances.csv")
-FIELDNAMES = ["id", "name", "brand", "category", "purchase_date", "warranty_expiry", "notes"]
+FIELDNAMES = [
+    "id", "name", "brand", "category", "purchase_date", "warranty_expiry",
+    "notes", "manual_url",
+]
 
 
 class Appliance(BaseModel):
@@ -21,6 +24,7 @@ class Appliance(BaseModel):
     purchase_date: str
     warranty_expiry: str
     notes: str = ""
+    manual_url: str = ""
 
 
 def read_appliances() -> List[dict]:
@@ -82,6 +86,7 @@ async def add_appliance(appliance: Appliance):
         "purchase_date": appliance.purchase_date,
         "warranty_expiry": appliance.warranty_expiry,
         "notes": appliance.notes,
+        "manual_url": appliance.manual_url,
     }
     appliances.append(new_row)
     write_appliances(appliances)
