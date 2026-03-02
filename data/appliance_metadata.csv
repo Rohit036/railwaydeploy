@@ -1,0 +1,20 @@
+appliance_type,category,typical_brands,typical_warranty_years,avg_lifespan_years,avg_price_gbp
+Refrigerator,Kitchen,Samsung;LG;Whirlpool;Bosch;Haier,2,14,800
+Washing Machine,Laundry,LG;Samsung;Bosch;Hotpoint;Miele,2,12,500
+Tumble Dryer,Laundry,Whirlpool;Samsung;LG;Hotpoint;Miele,2,13,450
+Dishwasher,Kitchen,Bosch;Miele;Samsung;Hotpoint;Beko,2,10,600
+Microwave Oven,Kitchen,Panasonic;Samsung;LG;Sharp;Russell Hobbs,1,9,150
+Oven Range,Kitchen,GE;Bosch;Samsung;Rangemaster;AEG,2,15,700
+Freezer,Kitchen,Samsung;LG;Hotpoint;Beko;Bosch,2,15,350
+Coffee Machine,Kitchen,DeLonghi;Nespresso;Sage;Breville;Philips,2,7,300
+Food Processor,Kitchen,KitchenAid;Kenwood;Magimix;Ninja;Cuisinart,1,8,250
+Air Conditioner,HVAC,Daikin;Mitsubishi;Panasonic;Samsung;LG,5,15,1000
+Boiler,HVAC,Worcester Bosch;Vaillant;Baxi;Ideal;Viessmann,7,15,2000
+Water Heater,Plumbing,Rheem;Vaillant;Worcester Bosch;Baxi;Ideal,6,12,800
+Television,Electronics,Sony;Samsung;LG;Panasonic;Hisense,1,8,700
+Laptop,Electronics,Apple;Dell;HP;Lenovo;Microsoft,1,6,900
+Printer,Electronics,HP;Canon;Epson;Brother;Lexmark,1,5,150
+Smart Speaker,Electronics,Amazon;Google;Apple;Sonos;Bose,1,5,120
+Vacuum Cleaner,Cleaning,Dyson;Miele;Hoover;Shark;Bissell,2,8,300
+Robot Vacuum,Cleaning,Roomba;Ecovacs;Roborock;Shark;Eufy,1,5,400
+Other,Other,,1,10,200
